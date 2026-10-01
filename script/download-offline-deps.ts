@@ -5,7 +5,7 @@ import fs from "fs/promises"
 import path from "path"
 
 const DEPS_DIR = "dist/offline-deps"
-const RIPGREP_VERSION = "14.1.1"
+const RIPGREP_VERSION = "15.1.0"
 
 interface Manifest {
   version: string
@@ -84,16 +84,21 @@ async function downloadClangd(): Promise<string> {
   // Fetch latest release info
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const releaseResponse = await fetch("https://api.github.com/repos/clangd/clangd/releases/latest", {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers: token ? { Authorization: ["Bearer", token].join(" ") } : undefined,
   })
   if (!releaseResponse.ok) {
-    throw new Error(`Failed to fetch clangd release info: HTTP ${releaseResponse.status} ${await releaseResponse.text()}`)
+    throw new Error(
+      `Failed to fetch clangd release info: HTTP ${releaseResponse.status} ${await releaseResponse.text()}`,
+    )
   }
-  const release = await releaseResponse.json() as { tag_name: string; assets: { name: string; browser_download_url: string }[] }
+  const release = (await releaseResponse.json()) as {
+    tag_name: string
+    assets: { name: string; browser_download_url: string }[]
+  }
   const tag = release.tag_name
 
   // Find Linux asset
-  const asset = release.assets.find(a => a.name.includes("linux") && a.name.includes(tag) && a.name.endsWith(".zip"))
+  const asset = release.assets.find((a) => a.name.includes("linux") && a.name.includes(tag) && a.name.endsWith(".zip"))
   if (!asset) {
     throw new Error("Could not find clangd Linux asset")
   }
@@ -129,16 +134,21 @@ async function downloadRustAnalyzer(): Promise<string> {
   // Fetch latest release info
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const releaseResponse = await fetch("https://api.github.com/repos/rust-lang/rust-analyzer/releases/latest", {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers: token ? { Authorization: ["Bearer", token].join(" ") } : undefined,
   })
   if (!releaseResponse.ok) {
-    throw new Error(`Failed to fetch rust-analyzer release info: HTTP ${releaseResponse.status} ${await releaseResponse.text()}`)
+    throw new Error(
+      `Failed to fetch rust-analyzer release info: HTTP ${releaseResponse.status} ${await releaseResponse.text()}`,
+    )
   }
-  const release = await releaseResponse.json() as { tag_name: string; assets: { name: string; browser_download_url: string }[] }
+  const release = (await releaseResponse.json()) as {
+    tag_name: string
+    assets: { name: string; browser_download_url: string }[]
+  }
   const tag = release.tag_name
 
   // Find Linux x64 asset
-  const asset = release.assets.find(a => a.name === "rust-analyzer-x86_64-unknown-linux-gnu.gz")
+  const asset = release.assets.find((a) => a.name === "rust-analyzer-x86_64-unknown-linux-gnu.gz")
   if (!asset) {
     throw new Error("Could not find rust-analyzer Linux asset")
   }
@@ -217,7 +227,7 @@ async function installNpmPackages(): Promise<Record<string, string>> {
 
 async function downloadModelsJson(): Promise<void> {
   console.log("\n=== Downloading models.json ===")
-  const url = "https://models.dev/api.json"
+  const url = "https://models.opencode.ai/api.json"
   const destPath = path.join(DEPS_DIR, "models.json")
   await downloadFile(url, destPath)
   console.log("models.json downloaded successfully")
@@ -249,7 +259,7 @@ async function createManifest(
   ripgrepVersion: string,
   clangdVersion: string,
   rustAnalyzerVersion: string,
-  npmVersions: Record<string, string>
+  npmVersions: Record<string, string>,
 ): Promise<void> {
   console.log("\n=== Creating manifest ===")
 
@@ -266,10 +276,7 @@ async function createManifest(
     },
   }
 
-  await Bun.write(
-    path.join(DEPS_DIR, "manifest.json"),
-    JSON.stringify(manifest, null, 2)
-  )
+  await Bun.write(path.join(DEPS_DIR, "manifest.json"), JSON.stringify(manifest, null, 2))
 
   console.log("Manifest created")
 }

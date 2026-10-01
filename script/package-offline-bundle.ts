@@ -24,7 +24,7 @@ async function buildOpencode(): Promise<string> {
   }
 
   // Use the existing build script
-  const proc = Bun.spawn(["bun", "run", "./script/build.ts"], {
+  const proc = Bun.spawn(["bun", "run", "./script/build.ts", "--single"], {
     cwd: "packages/opencode",
     stdout: "inherit",
     stderr: "inherit",
@@ -40,7 +40,9 @@ async function buildOpencode(): Promise<string> {
   // Find the linux-x64 binary
   const distDir = "packages/opencode/dist"
   const entries = await fs.readdir(distDir)
-  const linuxX64Dir = entries.find(e => e.includes("linux") && e.includes("x64") && !e.includes("baseline") && !e.includes("musl"))
+  const linuxX64Dir = entries.find(
+    (e) => e.includes("linux") && e.includes("x64") && !e.includes("baseline") && !e.includes("musl"),
+  )
 
   if (!linuxX64Dir) {
     throw new Error("Could not find linux-x64 build output")
@@ -70,7 +72,9 @@ async function createBundle(buildDir: string): Promise<void> {
 
   // Copy OpenTUI native library (glob for installed version)
   console.log("Copying OpenTUI native library...")
-  const opentuiGlob = new Bun.Glob("node_modules/.bun/@opentui+core-linux-x64@*/node_modules/@opentui/core-linux-x64/libopentui.so")
+  const opentuiGlob = new Bun.Glob(
+    "node_modules/.bun/@opentui+core-linux-x64@*/node_modules/@opentui/core-linux-x64/libopentui.so",
+  )
   const opentuiMatches = Array.from(opentuiGlob.scanSync({ dot: true }))
   if (opentuiMatches.length === 0) {
     throw new Error("Could not find OpenTUI native library - ensure @opentui/core-linux-x64 is installed")
@@ -115,6 +119,7 @@ export OPENCODE_OFFLINE_DEPS_PATH="\$SCRIPT_DIR/deps"
 export OPENCODE_DISABLE_AUTOUPDATE=true
 export OPENCODE_DISABLE_LSP_DOWNLOAD=true
 export OPENCODE_DISABLE_MODELS_FETCH=true
+export OPENCODE_MODELS_PATH="\$SCRIPT_DIR/deps/models.json"
 
 exec "\$SCRIPT_DIR/bin/opencode" "\$@"
 `
@@ -206,14 +211,11 @@ async function createTarball(): Promise<void> {
   await fs.unlink(tarballPath).catch(() => {})
 
   // Create tarball
-  const proc = Bun.spawn(
-    ["tar", "-czf", TARBALL_NAME, "opencode-offline-linux-x64"],
-    {
-      cwd: "dist",
-      stdout: "inherit",
-      stderr: "inherit",
-    }
-  )
+  const proc = Bun.spawn(["tar", "-czf", TARBALL_NAME, "opencode-offline-linux-x64"], {
+    cwd: "dist",
+    stdout: "inherit",
+    stderr: "inherit",
+  })
   await proc.exited
   if (proc.exitCode !== 0) {
     throw new Error("Failed to create tarball")
