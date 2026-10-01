@@ -1,0 +1,85 @@
+name: Offline Analysis Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to publish to GHCR (e.g. v6)"
+        required: true
+        default: v6
+      push:
+        description: "Push the image to GHCR after the tests pass"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}-analysis
+
+jobs:
+  build:
+    name: build, test and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Download offline dependencies
+        run: bun run script/download-offline-deps.ts
+
+      - name: Build and package bundle
+        run: bun run script/package-offline-bundle.ts
+        env:
+          BUNDLE_VERSION: ${{ inputs.tag }}
+          BUNDLE_COMMIT_SHA: ${{ github.sha }}
+
+      - name: Verify web app in bundle
+        run: test -f dist/opencode-offline-linux-x64/deps/app/index.html
+
+      - name: Run offline integration tests
+        run: docker compose -f test/offline/docker-compose.yml up --build --exit-code-from opencode-offline
+
+      - name: Build analysis image
+        run: docker build -f test/offline/Dockerfile.analysis -t "${IMAGE,,}:${{ inputs.tag }}" .
+
+      - name: Run analysis toolbox tests (air-gapped)
+        run: docker compose -f test/offline/docker-compose.analysis.yml up --build --exit-code-from opencode-analysis
+
+      - name: Validate tools and opencode in the built image
+        run: |
+          docker run --rm --network none --entrypoint /bin/bash "${IMAGE,,}:${{ inputs.tag }}" -lc '
+            set -euo pipefail
+            for bin in rg jq mlr python3 pip tree git curl nc ip lsof ps opencode; do
+              printf "%-10s %s\n" "$bin" "$(command -v "$bin")"
+            done
+            mlr --version
+            python3 -c "import pandas, numpy, duckdb, pyarrow, scipy, tabulate; print(\"python deps ok\")"
+            opencode --version
+          '
+
+      - name: Login to GHCR
+        if: ${{ inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: ${{ inputs.push }}
+        run: docker push "${IMAGE,,}:${{ inputs.tag }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "## Offline Analysis Image"
+            echo ""
+            echo "**Image:** \`${IMAGE,,}:${{ inputs.tag }}\`"
+            echo ""
+            echo "**Pushed:** ${{ inputs.push }}"
+          } >> "$GITHUB_STEP_SUMMARY"

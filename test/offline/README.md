@@ -89,6 +89,29 @@ ANALYSIS_DATA=/path/to/csv-and-md docker compose -f test/offline/docker-compose.
 docker run -it --rm -v /path/to/csv-and-md:/home/opencode/data:ro opencode-offline-analysis
 ```
 
+### Publishing the analysis image to GHCR
+
+Building the image locally needs outbound access to the RHEL repos, GitHub (Miller) and PyPI, so it
+cannot be built from an air-gapped machine. The `Offline Analysis Image` workflow
+(`.github/workflows/offline-analysis-image.yml`) does the whole chain on a GitHub runner: build the
+offline bundle, run the offline integration tests, build `Dockerfile.analysis`, run the analysis
+toolbox checks on the `internal: true` network, then push to
+`ghcr.io/<owner>/<repo>-analysis:<tag>`.
+
+Trigger it from the Actions tab (**Offline Analysis Image** → **Run workflow**) or from the CLI:
+
+```bash
+gh workflow run offline-analysis-image.yml -f tag=v6
+# dry run: build and test only, no push
+gh workflow run offline-analysis-image.yml -f tag=v6 -f push=false
+```
+
+Pull the published image with:
+
+```bash
+docker pull ghcr.io/<owner>/opencode-offline-analysis:v6
+```
+
 Included tooling:
 
 | Category | Tools |
