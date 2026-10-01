@@ -116,7 +116,7 @@ Included tooling:
 
 | Category | Tools |
 |---|---|
-| Search / text | `rg` (from the bundle), `jq`, `grep`, `gawk`, `sed`, `findutils`, `coreutils`, `diffutils`, `file`, `less`, `tree` |
+| Search / text | `rg` (from the bundle), `jq`, `grep`, `gawk`, `sed`, `findutils`, `coreutils-single`, `diffutils`, `file`, `less` |
 | CSV / data | `mlr` (Miller), `python3` (venv, see below), `pip` |
 | Archives | `tar`, `gzip`, `xz`, `zip`, `unzip` |
 | Debugging | `curl`, `procps-ng` (`ps`), `lsof`, `iproute` (`ip`), `nmap-ncat` (`nc`), `git` |
