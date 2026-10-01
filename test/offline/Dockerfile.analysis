@@ -8,9 +8,9 @@
 #   docker build -f test/offline/Dockerfile.analysis -t opencode-offline-analysis .
 FROM --platform=linux/amd64 registry.access.redhat.com/ubi9/ubi:9.5
 
-ARG MILLER_VERSION=6.13.0
-# sha256 of miller-6.13.0-linux-amd64.tar.gz - update when bumping MILLER_VERSION
-ARG MILLER_SHA256=6aa8f46c6f4d11cd241a3f3fad20273fadcbe1ea6ab122f4f542200e7c3b4f23
+ARG MILLER_VERSION=6.22.0
+# sha256 of miller-6.22.0-linux-amd64.tar.gz - update when bumping MILLER_VERSION
+ARG MILLER_SHA256=0551f8696e8f42dae1c67c782bbe04e0589e718268722fa98561e2566e4623b8
 
 # System tooling for log/CSV/doc exploration and container debugging.
 # Note: ripgrep (rg) and miller (mlr) are not in the RHEL9 repositories:

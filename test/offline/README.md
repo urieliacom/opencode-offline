@@ -107,7 +107,7 @@ Notes:
 
 - Building requires network access (RHEL repos, GitHub for Miller, PyPI). The resulting image runs
   fully air-gapped; `docker-compose.analysis.yml` uses the same `internal: true` network.
-- Miller's version is controlled by the `MILLER_VERSION` build arg.
+- Miller's version is controlled by the `MILLER_VERSION` build arg; update `MILLER_SHA256` to match when bumping it.
 - To install extra Python packages from a local mirror, use `pip install --index-url <mirror>` inside
   the container or extend `analysis-requirements.txt` before building.
 
