@@ -17,6 +17,11 @@ permissions:
   contents: read
   packages: write
 
+# Two dispatches publishing the same tag would race on the registry
+concurrency:
+  group: offline-analysis-image-${{ inputs.tag }}
+  cancel-in-progress: false
+
 env:
   IMAGE: ghcr.io/${{ github.repository }}-analysis
 
