@@ -1,0 +1,8 @@
+# Python packages installed into the dedicated analysis venv (/opt/analysis-venv).
+# Pinned so the image is reproducible and can be rebuilt from a local PyPI mirror.
+pandas==3.0.6
+numpy==2.5.3
+duckdb==1.5.6
+pyarrow==25.0.1
+scipy==1.18.1
+tabulate==0.10.0

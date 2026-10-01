@@ -1,0 +1,27 @@
+services:
+  opencode-analysis:
+    build:
+      context: ../..
+      dockerfile: test/offline/Dockerfile.analysis
+    # Default: run the analysis toolbox checks. Override to get a shell:
+    #   docker compose -f test/offline/docker-compose.analysis.yml run --rm \
+    #     --entrypoint /bin/bash opencode-analysis
+    entrypoint: ["/bin/bash", "/opt/opencode/test-analysis-tools.sh"]
+    networks:
+      - offline
+    volumes:
+      # Mount your CSV + Markdown data sets read-only for the agent to analyse
+      - ${ANALYSIS_DATA:-./data}:/home/opencode/data:ro
+    environment:
+      - OPENCODE_OFFLINE_MODE=true
+      - OPENCODE_OFFLINE_DEPS_PATH=/opt/opencode/deps
+      - OPENCODE_DISABLE_AUTOUPDATE=true
+      - OPENCODE_DISABLE_LSP_DOWNLOAD=true
+      - OPENCODE_DISABLE_MODELS_FETCH=true
+      # Point at your local/remote LLM. Requires dropping `internal: true` below.
+      - LLM_ENDPOINT=${LLM_ENDPOINT:-}
+
+networks:
+  offline:
+    driver: bridge
+    internal: true # No outbound internet access
