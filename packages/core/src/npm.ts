@@ -204,7 +204,21 @@ const layer = Layer.effect(
     const which = Effect.fn("Npm.which")(function* (pkg: string, bin?: string) {
       const bundled = Offline.deps()
       if (bundled) {
-        const name = bin ?? (pkg.startsWith("@") ? pkg.split("/")[1] : pkg)
+        const manifest = yield* afs
+          .readJson(path.join(bundled, "node_modules", pkg, "package.json"))
+          .pipe(Effect.orElseSucceed(() => ({})))
+        const entries = (manifest as { bin?: string | Record<string, string> }).bin
+        const unscoped = pkg.startsWith("@") ? pkg.split("/")[1] : pkg
+        const name =
+          bin ??
+          (typeof entries === "string"
+            ? unscoped
+            : entries
+              ? entries[unscoped]
+                ? unscoped
+                : Object.keys(entries)[0]
+              : unscoped)
+        if (!name) return
         const file = path.join(bundled, "node_modules", ".bin", name)
         if (yield* afs.existsSafe(file)) return file
         return

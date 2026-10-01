@@ -492,10 +492,12 @@ export const Pyright: Info = {
   id: "pyright",
   extensions: [".py", ".pyi"],
   root: NearestRoot(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "pyrightconfig.json"]),
-  async spawn(root) {
+  async spawn(root, _ctx, flags) {
     let binary = which("pyright-langserver")
     const args = []
+    if (!binary && Offline.isEnabled()) binary = await Npm.which("pyright", "pyright-langserver")
     if (!binary) {
+      if (flags.disableLspDownload) return
       const resolved = await Npm.which("pyright", "pyright-langserver")
       if (!resolved) return
       binary = resolved
