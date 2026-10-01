@@ -1,0 +1,107 @@
+# Data-analysis variant of the offline image.
+#
+# Same offline bundle as test/offline/Dockerfile, plus a CLI toolbox for
+# analysing CSV data sets described by Markdown documents. Every tool is
+# reachable from the agent's shell (PATH is set for both ENV and login shells).
+#
+# Build (from repo root, after building the bundle into dist/):
+#   docker build -f test/offline/Dockerfile.analysis -t opencode-offline-analysis .
+FROM --platform=linux/amd64 registry.access.redhat.com/ubi9/ubi:9.5
+
+ARG MILLER_VERSION=6.13.0
+# sha256 of miller-6.13.0-linux-amd64.tar.gz - update when bumping MILLER_VERSION
+ARG MILLER_SHA256=6aa8f46c6f4d11cd241a3f3fad20273fadcbe1ea6ab122f4f542200e7c3b4f23
+
+# System tooling for log/CSV/doc exploration and container debugging.
+# Note: ripgrep (rg) and miller (mlr) are not in the RHEL9 repositories:
+# rg is taken from the offline bundle below, mlr is a static release binary.
+RUN dnf install -y --nodocs \
+    coreutils \
+    findutils \
+    gawk \
+    sed \
+    grep \
+    diffutils \
+    file \
+    less \
+    tree \
+    tar \
+    gzip \
+    xz \
+    zip \
+    unzip \
+    procps-ng \
+    lsof \
+    iproute \
+    nmap-ncat \
+    jq \
+    curl \
+    git-core \
+    shadow-utils \
+    glibc \
+    libstdc++ \
+    python3 \
+    python3-pip \
+    python3.12 \
+    python3.12-pip \
+  && dnf clean all \
+  && rm -rf /var/cache/dnf
+
+# Miller: CSV/TSV/JSON manipulation, statistics and filtering from the CLI
+RUN curl -fsSL -o /tmp/miller.tar.gz \
+      "https://github.com/johnkerl/miller/releases/download/v${MILLER_VERSION}/miller-${MILLER_VERSION}-linux-amd64.tar.gz" \
+  && echo "${MILLER_SHA256}  /tmp/miller.tar.gz" | sha256sum -c - \
+  && tar -xzf /tmp/miller.tar.gz -C /tmp \
+  && install -m 0755 "/tmp/miller-${MILLER_VERSION}-linux-amd64/mlr" /usr/local/bin/mlr \
+  && rm -rf /tmp/miller.tar.gz "/tmp/miller-${MILLER_VERSION}-linux-amd64"
+
+# Dedicated Python venv for data analysis (kept separate from the system python)
+ENV ANALYSIS_VENV=/opt/analysis-venv
+COPY test/offline/analysis-requirements.txt /tmp/analysis-requirements.txt
+RUN python3.12 -m venv "$ANALYSIS_VENV" \
+  && "$ANALYSIS_VENV/bin/pip" install --no-cache-dir --upgrade pip \
+  && "$ANALYSIS_VENV/bin/pip" install --no-cache-dir -r /tmp/analysis-requirements.txt \
+  && rm -f /tmp/analysis-requirements.txt
+
+# Copy the offline bundle
+COPY dist/opencode-offline-linux-x64/ /opt/opencode/
+
+# Copy test scripts
+COPY test/offline/test-offline.sh /opt/opencode/test-offline.sh
+COPY test/offline/test-analysis-tools.sh /opt/opencode/test-analysis-tools.sh
+RUN chmod +x /opt/opencode/test-offline.sh /opt/opencode/test-analysis-tools.sh
+
+# Expose bundled binaries (ripgrep, opencode) on PATH so the agent can run them
+RUN mkdir -p /opt/opencode/tools/bin \
+  && ln -sf /opt/opencode/deps/ripgrep/rg /opt/opencode/tools/bin/rg \
+  && ln -sf /opt/opencode/opencode-offline /opt/opencode/tools/bin/opencode
+
+ENV PATH="/opt/analysis-venv/bin:/opt/opencode/tools/bin:${PATH}"
+
+# Login shells (bash -l) rebuild PATH from /etc/profile, so re-apply it there
+RUN printf '%s\n' \
+    'export PATH="/opt/analysis-venv/bin:/opt/opencode/tools/bin:$PATH"' \
+    'export ANALYSIS_VENV=/opt/analysis-venv' \
+    > /etc/profile.d/opencode-analysis.sh \
+  && chmod 0644 /etc/profile.d/opencode-analysis.sh
+
+# Create non-root user
+RUN useradd -m -s /bin/bash opencode
+
+# Set up workspace with a git repo
+RUN mkdir -p /home/opencode/workspace /home/opencode/data \
+  && chown -R opencode:opencode /home/opencode
+
+USER opencode
+WORKDIR /home/opencode/workspace
+
+RUN git init && git config user.email "test@test.com" && git config user.name "Test"
+
+# Set offline environment variables
+ENV OPENCODE_OFFLINE_MODE=true
+ENV OPENCODE_OFFLINE_DEPS_PATH=/opt/opencode/deps
+ENV OPENCODE_DISABLE_AUTOUPDATE=true
+ENV OPENCODE_DISABLE_LSP_DOWNLOAD=true
+ENV OPENCODE_DISABLE_MODELS_FETCH=true
+
+ENTRYPOINT ["/opt/opencode/opencode-offline"]

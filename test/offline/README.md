@@ -67,6 +67,50 @@ Inside the container:
 /opt/opencode/deps/ripgrep/rg --version
 ```
 
+## Data-Analysis Image
+
+`Dockerfile.analysis` builds a variant of the offline image for agents that analyse large CSV data
+sets described by Markdown documents. It contains the same offline bundle plus a CLI toolbox, and
+every tool is on `PATH` (including the bundled `rg` and `opencode`, which are symlinked into
+`/opt/opencode/tools/bin`), so the agent can run them directly from its shell.
+
+```bash
+# 1. Build the offline bundle first (see Quick Start above)
+# 2. Build the analysis image
+docker build -f test/offline/Dockerfile.analysis -t opencode-offline-analysis .
+
+# 3. Verify the toolbox (38 checks: PATH resolution + smoke runs)
+docker run --rm --network none --entrypoint /opt/opencode/test-analysis-tools.sh opencode-offline-analysis
+
+# or via compose, mounting your data set read-only at /home/opencode/data
+ANALYSIS_DATA=/path/to/csv-and-md docker compose -f test/offline/docker-compose.analysis.yml up --build
+
+# Interactive session with the agent
+docker run -it --rm -v /path/to/csv-and-md:/home/opencode/data:ro opencode-offline-analysis
+```
+
+Included tooling:
+
+| Category | Tools |
+|---|---|
+| Search / text | `rg` (from the bundle), `jq`, `grep`, `gawk`, `sed`, `findutils`, `coreutils`, `diffutils`, `file`, `less`, `tree` |
+| CSV / data | `mlr` (Miller), `python3` (venv, see below), `pip` |
+| Archives | `tar`, `gzip`, `xz`, `zip`, `unzip` |
+| Debugging | `curl`, `procps-ng` (`ps`), `lsof`, `iproute` (`ip`), `nmap-ncat` (`nc`), `git` |
+
+The Python analysis environment is a dedicated venv at `/opt/analysis-venv`, placed first on `PATH`,
+so `python3`/`pip` resolve to it (the system `python3.9`/`python3.12` interpreters stay untouched at
+`/usr/bin`). Packages are pinned in `analysis-requirements.txt`: `pandas`, `numpy`, `duckdb`,
+`pyarrow`, `scipy`, `tabulate`.
+
+Notes:
+
+- Building requires network access (RHEL repos, GitHub for Miller, PyPI). The resulting image runs
+  fully air-gapped; `docker-compose.analysis.yml` uses the same `internal: true` network.
+- Miller's version is controlled by the `MILLER_VERSION` build arg.
+- To install extra Python packages from a local mirror, use `pip install --index-url <mirror>` inside
+  the container or extend `analysis-requirements.txt` before building.
+
 ## Test Coverage
 
 | Section | Tests | What it validates |
