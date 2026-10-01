@@ -82,9 +82,12 @@ async function downloadClangd(): Promise<string> {
   console.log("\n=== Downloading clangd ===")
 
   // Fetch latest release info
-  const releaseResponse = await fetch("https://api.github.com/repos/clangd/clangd/releases/latest")
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+  const releaseResponse = await fetch("https://api.github.com/repos/clangd/clangd/releases/latest", {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
   if (!releaseResponse.ok) {
-    throw new Error("Failed to fetch clangd release info")
+    throw new Error(`Failed to fetch clangd release info: HTTP ${releaseResponse.status} ${await releaseResponse.text()}`)
   }
   const release = await releaseResponse.json() as { tag_name: string; assets: { name: string; browser_download_url: string }[] }
   const tag = release.tag_name
@@ -124,9 +127,12 @@ async function downloadRustAnalyzer(): Promise<string> {
   console.log("\n=== Downloading rust-analyzer ===")
 
   // Fetch latest release info
-  const releaseResponse = await fetch("https://api.github.com/repos/rust-lang/rust-analyzer/releases/latest")
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+  const releaseResponse = await fetch("https://api.github.com/repos/rust-lang/rust-analyzer/releases/latest", {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
   if (!releaseResponse.ok) {
-    throw new Error("Failed to fetch rust-analyzer release info")
+    throw new Error(`Failed to fetch rust-analyzer release info: HTTP ${releaseResponse.status} ${await releaseResponse.text()}`)
   }
   const release = await releaseResponse.json() as { tag_name: string; assets: { name: string; browser_download_url: string }[] }
   const tag = release.tag_name
