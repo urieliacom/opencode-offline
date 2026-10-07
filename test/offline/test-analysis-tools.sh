@@ -144,6 +144,47 @@ echo "--- 6. OpenCode bundle ---"
 
 tool opencode opencode --version
 
+# --- Section 7: Security regression checks ---
+echo ""
+echo "--- 7. Security regression checks ---"
+
+for python in /usr/local/bin/python3 "$VENV/bin/python3"; do
+  if "$python" - >/dev/null 2>&1 <<'PY'
+import importlib.util
+import sys
+from pip._vendor import urllib3
+
+assert sys.version_info >= (3, 13, 16)
+assert importlib.util.find_spec("setuptools") is None
+assert tuple(map(int, urllib3.__version__.split("."))) >= (2, 0, 6)
+PY
+  then
+    pass "$python uses patched Python/urllib3 without setuptools"
+  else
+    fail "$python uses patched Python/urllib3 without setuptools"
+  fi
+done
+
+if pip check >/dev/null 2>&1; then
+  pass "analysis Python dependencies are consistent"
+else
+  fail "analysis Python dependencies are consistent"
+fi
+
+if grep -q 'go1\.27\.1' /usr/local/share/miller-build.txt; then
+  pass "Miller was rebuilt with Go 1.27.1"
+else
+  fail "Miller was rebuilt with Go 1.27.1"
+fi
+
+for pkg in 'python3*' 'libxml2*' 'libevent*' 'vim*'; do
+  if dpkg-query -W -f='${db:Status-Status}\n' "$pkg" 2>/dev/null | grep -q '^installed$'; then
+    fail "unnecessary runtime package $pkg is installed"
+  else
+    pass "unnecessary runtime package $pkg is absent"
+  fi
+done
+
 echo ""
 echo "======================================"
 echo " Results: $PASS passed, $FAIL failed"

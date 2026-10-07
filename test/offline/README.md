@@ -70,16 +70,17 @@ Inside the container:
 ## Data-Analysis Image
 
 `Dockerfile.analysis` builds a variant of the offline image for agents that analyse large CSV data
-sets described by Markdown documents. It contains the same offline bundle plus a CLI toolbox, and
+sets described by Markdown documents. Unlike the UBI9 integration-test image, it uses the official
+Python 3.13.16 slim Debian Trixie runtime. It contains the same offline bundle plus a CLI toolbox, and
 every tool is on `PATH` (including the bundled `rg` and `opencode`, which are symlinked into
 `/opt/opencode/tools/bin`), so the agent can run them directly from its shell.
 
 ```bash
 # 1. Build the offline bundle first (see Quick Start above)
 # 2. Build the analysis image
-docker build -f test/offline/Dockerfile.analysis -t opencode-offline-analysis .
+docker build --pull --no-cache -f test/offline/Dockerfile.analysis -t opencode-offline-analysis .
 
-# 3. Verify the toolbox (38 checks: PATH resolution + smoke runs)
+# 3. Verify the toolbox and security regression checks
 docker run --rm --network none --entrypoint /opt/opencode/test-analysis-tools.sh opencode-offline-analysis
 
 # or via compose, mounting your data set read-only at /home/opencode/data
@@ -91,7 +92,8 @@ docker run -it --rm -v /path/to/csv-and-md:/home/opencode/data:ro opencode-offli
 
 ### Publishing the analysis image to GHCR
 
-Building the image locally needs outbound access to the RHEL repos, GitHub (Miller) and PyPI, so it
+Building the image locally needs outbound access to Docker Hub, Debian repos, the Go module proxy
+and checksum database (Miller), and PyPI, so it
 cannot be built from an air-gapped machine. The `Offline Analysis Image` workflow
 (`.github/workflows/offline-analysis-image.yml`) does the whole chain on a GitHub runner: build the
 offline bundle, run the offline integration tests, build `Dockerfile.analysis`, run the analysis
@@ -116,23 +118,44 @@ Included tooling:
 
 | Category | Tools |
 |---|---|
-| Search / text | `rg` (from the bundle), `jq`, `grep`, `gawk`, `sed`, `findutils`, `coreutils-single`, `diffutils`, `file`, `less` |
+| Search / text | `rg` (from the bundle), `jq`, `grep`, `gawk`, `sed`, `findutils`, `coreutils`, `diffutils`, `file`, `less`, `tree` |
 | CSV / data | `mlr` (Miller), `python3` (venv, see below), `pip` |
 | Archives | `tar`, `gzip`, `xz`, `zip`, `unzip` |
-| Debugging | `curl`, `procps-ng` (`ps`), `lsof`, `iproute` (`ip`), `nmap-ncat` (`nc`), `git` |
+| Debugging | `curl`, `procps` (`ps`), `lsof`, `iproute2` (`ip`), `netcat-openbsd` (`nc`), `git` |
 
 The Python analysis environment is a dedicated venv at `/opt/analysis-venv`, placed first on `PATH`,
-so `python3`/`pip` resolve to it (the system `python3.9`/`python3.12` interpreters stay untouched at
-`/usr/bin`). Packages are pinned in `analysis-requirements.txt`: `pandas`, `numpy`, `duckdb`,
+so `python3`/`pip` resolve to it. The only underlying interpreter is Python 3.13.16 at
+`/usr/local/bin/python3`; no distribution Python or DNF is installed. Packages are pinned in
+`analysis-requirements.txt`: `pandas`, `numpy`, `duckdb`,
 `pyarrow`, `scipy`, `tabulate`.
 
 Notes:
 
-- Building requires network access (RHEL repos, GitHub for Miller, PyPI). The resulting image runs
+- Building requires network access (Docker Hub, Debian repos, Go proxy/checksum database, PyPI). The resulting image runs
   fully air-gapped; `docker-compose.analysis.yml` uses the same `internal: true` network.
-- Miller's version is controlled by the `MILLER_VERSION` build arg; update `MILLER_SHA256` to match when bumping it.
+- Miller's version is controlled by the `MILLER_VERSION` build arg. It is built from checksum-verified
+  Go modules with Go 1.27.1, not downloaded as a binary containing an older Go runtime.
+  Build metadata is retained at `/usr/local/share/miller-build.txt`; the Go toolchain and module
+  cache remain in the builder stage, not the shipped image.
+- Runtime OS packages are upgraded during the build, with no recommended packages installed.
+  `vim`, `libxml2`/its Python bindings, `libevent`, and `setuptools` are not needed and are absent.
+  OpenBSD netcat replaces Ncat; scripts using Ncat-specific options must be adapted.
 - To install extra Python packages from a local mirror, use `pip install --index-url <mirror>` inside
   the container or extend `analysis-requirements.txt` before building.
+
+### Vulnerability verification
+
+Rebuild with `--pull --no-cache` and scan the **final image digest** with JFrog Xray before deploying
+or publishing it. The toolbox suite checks both Python environments, pip's vendored urllib3,
+Miller's Go build metadata, dependency consistency, and absence of unnecessary vulnerable packages.
+These regression checks are not a substitute for an Xray scan and do not guarantee a clean report.
+
+The full offline bundle is still copied into the image, including downloaded native executables
+and npm dependencies. If Xray reports another embedded Go runtime (for example an npm-provided
+executable), use the reported artifact path to identify and update or rebuild its owning dependency.
+Changing the Miller builder does not patch other binaries. Refresh the pinned Python and Go base
+tags when new security releases become available, and assess Debian packages using Debian's
+security advisories/backports rather than comparing their versions with RHEL RPM fix versions.
 
 ## Test Coverage
 

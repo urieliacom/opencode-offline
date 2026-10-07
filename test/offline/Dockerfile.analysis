@@ -6,38 +6,36 @@
 #
 # Build (from repo root, after building the bundle into dist/):
 #   docker build -f test/offline/Dockerfile.analysis -t opencode-offline-analysis .
-FROM --platform=linux/amd64 registry.access.redhat.com/ubi9/ubi:9.5
+FROM --platform=linux/amd64 golang:1.27.1-trixie AS miller
 
 ARG MILLER_VERSION=6.22.0
-ARG MILLER_SHA256=0551f8696e8f42dae1c67c782bbe04e0589e718268722fa98561e2566e4623b8
 
-RUN dnf install -y --nodocs \
-		findutils gawk sed grep diffutils file less tar gzip xz zip unzip \
-		procps-ng lsof iproute nmap-ncat jq git-core shadow-utils glibc libstdc++ \
-		python3 python3-pip python3.12 python3.12-pip \
-	&& dnf clean all \
-	&& rm -rf /var/cache/dnf
+# Rebuild rather than copying a release binary with an older embedded Go runtime.
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOSUMDB=sum.golang.org GOPROXY=https://proxy.golang.org
+RUN GOBIN=/out go install -trimpath "github.com/johnkerl/miller/v6/cmd/mlr@v${MILLER_VERSION}" \
+	&& go version -m /out/mlr > /out/miller-build.txt
 
-# tree is in RHEL9 BaseOS but not the UBI repos; install the compatible Rocky 9 RPM.
-RUN curl -fsSL -o /tmp/tree.rpm https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/Packages/t/tree-1.8.0-10.el9.x86_64.rpm \
-	&& echo 'a08b806de4d0f919f23dd408f7fc8e0fd1af1fe0bf28838ae529dcb9a3245eeb  /tmp/tree.rpm' | sha256sum -c - \
-	&& dnf install -y --nodocs /tmp/tree.rpm \
-	&& dnf clean all \
-	&& rm -f /tmp/tree.rpm
+FROM --platform=linux/amd64 python:3.13.16-slim-trixie AS toolbox
 
-RUN curl -fsSL -o /tmp/miller.tar.gz \
-			"https://github.com/johnkerl/miller/releases/download/v${MILLER_VERSION}/miller-${MILLER_VERSION}-linux-amd64.tar.gz" \
-	&& echo "${MILLER_SHA256}  /tmp/miller.tar.gz" | sha256sum -c - \
-	&& tar -xzf /tmp/miller.tar.gz -C /tmp \
-	&& install -m 0755 "/tmp/miller-${MILLER_VERSION}-linux-amd64/mlr" /usr/local/bin/mlr \
-	&& rm -rf /tmp/miller.tar.gz "/tmp/miller-${MILLER_VERSION}-linux-amd64"
+# No DNF/system Python, vim, libxml2 bindings or libevent-based ncat in the runtime.
+RUN apt-get update \
+	&& apt-get upgrade -y \
+	&& apt-get install -y --no-install-recommends \
+		findutils gawk sed grep diffutils file less tar gzip xz-utils zip unzip \
+		procps lsof iproute2 netcat-openbsd jq git passwd libstdc++6 curl tree \
+	&& rm -rf /var/lib/apt/lists/*
+
+COPY --from=miller /out/mlr /usr/local/bin/mlr
+COPY --from=miller /out/miller-build.txt /usr/local/share/miller-build.txt
 
 ENV ANALYSIS_VENV=/opt/analysis-venv
 COPY test/offline/analysis-requirements.txt /tmp/analysis-requirements.txt
-RUN python3.12 -m venv "$ANALYSIS_VENV" \
-	&& "$ANALYSIS_VENV/bin/pip" install --no-cache-dir --upgrade pip \
+RUN python3 -m venv "$ANALYSIS_VENV" \
 	&& "$ANALYSIS_VENV/bin/pip" install --no-cache-dir -r /tmp/analysis-requirements.txt \
+	&& "$ANALYSIS_VENV/bin/pip" check \
 	&& rm -f /tmp/analysis-requirements.txt
+
+FROM toolbox
 
 COPY dist/opencode-offline-linux-x64/ /opt/opencode/
 COPY test/offline/test-offline.sh /opt/opencode/test-offline.sh
