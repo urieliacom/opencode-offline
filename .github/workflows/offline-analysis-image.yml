@@ -50,10 +50,12 @@ jobs:
         run: docker compose -f test/offline/docker-compose.yml up --build --exit-code-from opencode-offline
 
       - name: Build analysis image
-        run: docker build -f test/offline/Dockerfile.analysis -t "${IMAGE,,}:${{ inputs.tag }}" .
+        run: docker build --pull -f test/offline/Dockerfile.analysis -t "${IMAGE,,}:${{ inputs.tag }}" .
 
-      - name: Run analysis toolbox tests (air-gapped)
-        run: docker compose -f test/offline/docker-compose.analysis.yml up --build --exit-code-from opencode-analysis
+      - name: Run analysis and offline tests on the publication image (air-gapped)
+        run: |
+          docker run --rm --network none --entrypoint /opt/opencode/test-analysis-tools.sh "${IMAGE,,}:${{ inputs.tag }}"
+          docker run --rm --network none --entrypoint /opt/opencode/test-offline.sh "${IMAGE,,}:${{ inputs.tag }}"
 
       - name: Validate tools and opencode in the built image
         run: |

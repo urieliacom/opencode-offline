@@ -96,8 +96,9 @@ Building the image locally needs outbound access to Docker Hub, Debian repos, th
 and checksum database (Miller), and PyPI, so it
 cannot be built from an air-gapped machine. The `Offline Analysis Image` workflow
 (`.github/workflows/offline-analysis-image.yml`) does the whole chain on a GitHub runner: build the
-offline bundle, run the offline integration tests, build `Dockerfile.analysis`, run the analysis
-toolbox checks on the `internal: true` network, then push to
+offline bundle, run the UBI9 offline integration tests, build `Dockerfile.analysis` with refreshed
+base images, run both the analysis toolbox and offline suites on the exact publication image with
+`--network none`, then push to
 `ghcr.io/<owner>/<repo>-analysis:<tag>`.
 
 Trigger it from the Actions tab (**Offline Analysis Image** → **Run workflow**) or from the CLI:
@@ -116,12 +117,12 @@ docker pull ghcr.io/<owner>/opencode-offline-analysis:v6
 
 Included tooling:
 
-| Category | Tools |
-|---|---|
+| Category      | Tools                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Search / text | `rg` (from the bundle), `jq`, `grep`, `gawk`, `sed`, `findutils`, `coreutils`, `diffutils`, `file`, `less`, `tree` |
-| CSV / data | `mlr` (Miller), `python3` (venv, see below), `pip` |
-| Archives | `tar`, `gzip`, `xz`, `zip`, `unzip` |
-| Debugging | `curl`, `procps` (`ps`), `lsof`, `iproute2` (`ip`), `netcat-openbsd` (`nc`), `git` |
+| CSV / data    | `mlr` (Miller), `python3` (venv, see below), `pip`                                                                 |
+| Archives      | `tar`, `gzip`, `xz`, `zip`, `unzip`                                                                                |
+| Debugging     | `curl`, `procps` (`ps`), `lsof`, `iproute2` (`ip`), `netcat-openbsd` (`nc`), `git`                                 |
 
 The Python analysis environment is a dedicated venv at `/opt/analysis-venv`, placed first on `PATH`,
 so `python3`/`pip` resolve to it. The only underlying interpreter is Python 3.13.16 at
@@ -159,14 +160,14 @@ security advisories/backports rather than comparing their versions with RHEL RPM
 
 ## Test Coverage
 
-| Section | Tests | What it validates |
-|---------|-------|-------------------|
-| Environment | Env vars, directory structure | Offline config is properly set, all expected dirs/files exist |
-| Binaries | opencode, ripgrep | Core binaries are executable and functional |
-| Network Isolation | curl to google, app.opencode.ai, models.dev | No outbound network access |
-| Web UI | Server start, root 200, HTML content, SPA fallback | Bundled web app served locally |
-| LSP Servers | typescript-language-server, pyright, clangd, rust-analyzer | LSP binaries present and executable |
-| CLI Commands | --help | Basic CLI functionality |
+| Section           | Tests                                                      | What it validates                                             |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------- |
+| Environment       | Env vars, directory structure                              | Offline config is properly set, all expected dirs/files exist |
+| Binaries          | opencode, ripgrep                                          | Core binaries are executable and functional                   |
+| Network Isolation | curl to google, app.opencode.ai, models.dev                | No outbound network access                                    |
+| Web UI            | Server start, root 200, HTML content, SPA fallback         | Bundled web app served locally                                |
+| LSP Servers       | typescript-language-server, pyright, clangd, rust-analyzer | LSP binaries present and executable                           |
+| CLI Commands      | --help                                                     | Basic CLI functionality                                       |
 
 ## Troubleshooting
 
