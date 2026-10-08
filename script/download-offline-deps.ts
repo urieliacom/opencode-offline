@@ -227,6 +227,15 @@ async function downloadModelsJson(): Promise<void> {
 async function buildWebApp(): Promise<void> {
   console.log("\n=== Building web app ===")
 
+  const install = Bun.spawn(["bun", "install", "--frozen-lockfile"], {
+    stdout: "inherit",
+    stderr: "inherit",
+  })
+  await install.exited
+  if (install.exitCode !== 0) {
+    throw new Error("Failed to install workspace dependencies")
+  }
+
   // Build the web app using turbo (handles workspace dependency graph)
   const proc = Bun.spawn(["bun", "turbo", "build", "--filter=@opencode-ai/app"], {
     stdout: "inherit",
