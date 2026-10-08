@@ -148,22 +148,44 @@ tool opencode opencode --version
 echo ""
 echo "--- 7. Security regression checks ---"
 
-for python in /usr/local/bin/python3 "$VENV/bin/python3"; do
+for python in /usr/bin/python3 "$VENV/bin/python3"; do
   if "$python" - >/dev/null 2>&1 <<'PY'
 import importlib.util
 import sys
-from pip._vendor import urllib3
+import pyexpat
 
 assert sys.version_info >= (3, 13, 16)
 assert importlib.util.find_spec("setuptools") is None
-assert tuple(map(int, urllib3.__version__.split("."))) >= (2, 0, 6)
+assert tuple(map(int, pyexpat.EXPAT_VERSION.removeprefix("expat_").split("."))) >= (2, 9, 0)
 PY
   then
-    pass "$python uses patched Python/urllib3 without setuptools"
+    pass "$python uses patched Python/Expat without setuptools"
   else
-    fail "$python uses patched Python/urllib3 without setuptools"
+    fail "$python uses patched Python/Expat without setuptools"
   fi
 done
+
+if python3 -c 'from pip._vendor import urllib3; assert tuple(map(int, urllib3.__version__.split("."))) >= (2, 8, 0)' >/dev/null 2>&1; then
+  pass "pip uses patched vendored urllib3"
+else
+  fail "pip uses patched vendored urllib3"
+fi
+
+if python3 - >/dev/null 2>&1 <<'PY'
+import re
+import subprocess
+
+version = subprocess.check_output(["curl", "--version"], text=True).splitlines()[0]
+curl = re.search(r"^curl ([\d.]+)", version).group(1)
+library = re.search(r"libcurl/([\d.]+)", version).group(1)
+assert curl == library
+assert tuple(map(int, curl.split("."))) >= (8, 22, 0)
+PY
+then
+  pass "curl and libcurl use matching current versions"
+else
+  fail "curl and libcurl use matching current versions"
+fi
 
 if pip check >/dev/null 2>&1; then
   pass "analysis Python dependencies are consistent"
@@ -177,13 +199,25 @@ else
   fail "Miller was rebuilt with Go 1.27.1"
 fi
 
-for pkg in 'python3*' 'libxml2*' 'libevent*' 'vim*'; do
-  if dpkg-query -W -f='${db:Status-Status}\n' "$pkg" 2>/dev/null | grep -q '^installed$'; then
-    fail "unnecessary runtime package $pkg is installed"
-  else
-    pass "unnecessary runtime package $pkg is absent"
-  fi
-done
+if command -v apk >/dev/null 2>&1 && [ "$(awk -F= '$1 == "ID" {print $2}' /etc/os-release)" = "wolfi" ]; then
+  pass "runtime uses the glibc-compatible APK distribution"
+  for pkg in gawk libxml2 libevent vim py3.13-setuptools; do
+    if apk info -e "$pkg" >/dev/null 2>&1; then
+      fail "unnecessary runtime package $pkg is installed"
+    else
+      pass "unnecessary runtime package $pkg is absent"
+    fi
+  done
+else
+  fail "runtime uses the glibc-compatible APK distribution"
+fi
+
+if test -f /opt/opencode/deps/node_modules/typescript/lib/tsserver.js \
+  && ! test -d /opt/opencode/deps/node_modules/@typescript/typescript-linux-x64; then
+  pass "TypeScript uses the JS language server, not an embedded Go compiler"
+else
+  fail "TypeScript uses the JS language server, not an embedded Go compiler"
+fi
 
 echo ""
 echo "======================================"

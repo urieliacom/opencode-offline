@@ -178,7 +178,8 @@ async function installNpmPackages(): Promise<Record<string, string>> {
 
   const packages = [
     "pyright",
-    "typescript",
+    // TypeScript 7 ships a Go compiler; retain the latest JS tsserver for the LSP.
+    "typescript@6.0.3",
     "typescript-language-server",
     "opencode-anthropic-auth@0.0.9",
     "@gitlab/opencode-gitlab-auth@1.3.0",

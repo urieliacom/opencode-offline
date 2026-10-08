@@ -6,7 +6,7 @@
 #
 # Build (from repo root, after building the bundle into dist/):
 #   docker build -f test/offline/Dockerfile.analysis -t opencode-offline-analysis .
-FROM --platform=linux/amd64 golang:1.27.1-trixie AS miller
+FROM --platform=linux/amd64 golang:1.27.1-alpine AS miller
 
 ARG MILLER_VERSION=6.22.0
 
@@ -15,15 +15,28 @@ ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOSUMDB=sum.golang.org GOPROXY=https://proxy
 RUN GOBIN=/out go install -trimpath "github.com/johnkerl/miller/v6/cmd/mlr@v${MILLER_VERSION}" \
 	&& go version -m /out/mlr > /out/miller-build.txt
 
-FROM --platform=linux/amd64 python:3.13.16-slim-trixie AS toolbox
+FROM miller AS bundle
+COPY dist/opencode-offline-linux-x64/ /bundle/
+# Reject outdated Go runtimes in downloaded npm/native binaries as well as Miller.
+RUN find /bundle -type f -exec sh -ec ' \
+	for file do \
+		metadata="$(go version -m "$file" 2>/dev/null)" || continue; \
+		version="$(printf "%s\n" "$metadata" | sed -n "1s/.*: //p")"; \
+		case "$version" in \
+			go1.27.1) ;; \
+			*) echo "Unexpected Go runtime $version in $file" >&2; exit 1 ;; \
+		esac; \
+	done' sh {} +
 
-# No DNF/system Python, vim, libxml2 bindings or libevent-based ncat in the runtime.
-RUN apt-get update \
-	&& apt-get upgrade -y \
-	&& apt-get install -y --no-install-recommends \
-		findutils gawk sed grep diffutils file less tar gzip xz-utils zip unzip \
-		procps lsof iproute2 netcat-openbsd jq git passwd libstdc++6 curl tree \
-	&& rm -rf /var/lib/apt/lists/*
+# Wolfi uses APK like Alpine but retains glibc for the offline bundle and DuckDB wheels.
+FROM --platform=linux/amd64 cgr.dev/chainguard/wolfi-base:latest AS toolbox
+
+RUN apk update \
+	&& apk upgrade --no-cache \
+	&& apk add --no-cache \
+		bash coreutils findutils sed grep diffutils file less tar gzip xz zip unzip \
+		procps lsof iproute2 netcat-openbsd jq git libstdc++ curl tree python-3.13 \
+	&& rm -rf /var/cache/apk/*
 
 COPY --from=miller /out/mlr /usr/local/bin/mlr
 COPY --from=miller /out/miller-build.txt /usr/local/share/miller-build.txt
@@ -38,7 +51,7 @@ RUN mkdir -p /opt/analysis-venv \
 
 FROM toolbox
 
-COPY dist/opencode-offline-linux-x64/ /opt/opencode/
+COPY --from=bundle /bundle/ /opt/opencode/
 COPY test/offline/test-offline.sh /opt/opencode/test-offline.sh
 COPY test/offline/test-analysis-tools.sh /opt/opencode/test-analysis-tools.sh
 RUN chmod +x /opt/opencode/test-offline.sh /opt/opencode/test-analysis-tools.sh \
@@ -53,7 +66,7 @@ RUN printf '%s\n' \
 		> /etc/profile.d/opencode-analysis.sh \
 	&& chmod 0644 /etc/profile.d/opencode-analysis.sh
 
-RUN useradd -m -s /bin/bash opencode \
+RUN adduser -D -s /bin/bash opencode \
 	&& mkdir -p /home/opencode/workspace /home/opencode/data \
 	&& chown -R opencode:opencode /home/opencode
 

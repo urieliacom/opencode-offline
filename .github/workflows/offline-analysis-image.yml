@@ -50,7 +50,7 @@ jobs:
         run: docker compose -f test/offline/docker-compose.yml up --build --exit-code-from opencode-offline
 
       - name: Build analysis image
-        run: docker build --pull -f test/offline/Dockerfile.analysis -t "${IMAGE,,}:${{ inputs.tag }}" .
+        run: docker build --pull --no-cache -f test/offline/Dockerfile.analysis -t "${IMAGE,,}:${{ inputs.tag }}" .
 
       - name: Run analysis and offline tests on the publication image (air-gapped)
         run: |
