@@ -124,7 +124,7 @@ Included tooling:
 | Archives      | `tar`, `gzip`, `xz`, `zip`, `unzip`                                                                                |
 | Debugging     | `curl`, `procps` (`ps`), `lsof`, `iproute2` (`ip`), `netcat-openbsd` (`nc`), `git`                                 |
 
-The Python analysis environment is a dedicated venv at `/opt/analysis-venv`, placed first on `PATH`,
+The Python analysis environment is a dedicated venv at `/opt/analysis-venv/.venv`, placed first on `PATH`,
 so `python3`/`pip` resolve to it. The only underlying interpreter is Python 3.13.16 at
 `/usr/local/bin/python3`; no distribution Python or DNF is installed. Packages are pinned in
 `analysis-requirements.txt`: `pandas`, `numpy`, `duckdb`,

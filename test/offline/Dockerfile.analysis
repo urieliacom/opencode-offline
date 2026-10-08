@@ -28,9 +28,10 @@ RUN apt-get update \
 COPY --from=miller /out/mlr /usr/local/bin/mlr
 COPY --from=miller /out/miller-build.txt /usr/local/share/miller-build.txt
 
-ENV ANALYSIS_VENV=/opt/analysis-venv
+ENV ANALYSIS_VENV=/opt/analysis-venv/.venv
 COPY test/offline/analysis-requirements.txt /tmp/analysis-requirements.txt
-RUN python3 -m venv "$ANALYSIS_VENV" \
+RUN mkdir -p /opt/analysis-venv \
+	&& python3 -m venv "$ANALYSIS_VENV" \
 	&& "$ANALYSIS_VENV/bin/pip" install --no-cache-dir -r /tmp/analysis-requirements.txt \
 	&& "$ANALYSIS_VENV/bin/pip" check \
 	&& rm -f /tmp/analysis-requirements.txt
@@ -45,10 +46,10 @@ RUN chmod +x /opt/opencode/test-offline.sh /opt/opencode/test-analysis-tools.sh 
 	&& ln -sf /opt/opencode/deps/ripgrep/rg /opt/opencode/tools/bin/rg \
 	&& ln -sf /opt/opencode/bin/opencode /opt/opencode/tools/bin/opencode
 
-ENV PATH="/opt/analysis-venv/bin:/opt/opencode/tools/bin:${PATH}"
+ENV PATH="${ANALYSIS_VENV}/bin:/opt/opencode/tools/bin:${PATH}"
 RUN printf '%s\n' \
-		'export PATH="/opt/analysis-venv/bin:/opt/opencode/tools/bin:$PATH"' \
-		'export ANALYSIS_VENV=/opt/analysis-venv' \
+		'export ANALYSIS_VENV=/opt/analysis-venv/.venv' \
+		'export PATH="${ANALYSIS_VENV}/bin:/opt/opencode/tools/bin:$PATH"' \
 		> /etc/profile.d/opencode-analysis.sh \
 	&& chmod 0644 /etc/profile.d/opencode-analysis.sh
 

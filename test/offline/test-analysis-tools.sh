@@ -8,7 +8,7 @@ set -uo pipefail
 
 PASS=0
 FAIL=0
-VENV="${ANALYSIS_VENV:-/opt/analysis-venv}"
+VENV="${ANALYSIS_VENV:-/opt/analysis-venv/.venv}"
 
 pass() {
   echo "  PASS: $1"

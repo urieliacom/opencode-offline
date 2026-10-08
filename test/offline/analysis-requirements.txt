@@ -1,4 +1,4 @@
-# Python packages installed into the dedicated analysis venv (/opt/analysis-venv).
+# Python packages installed into the dedicated analysis venv (/opt/analysis-venv/.venv).
 # Pinned so the image is reproducible and can be rebuilt from a local PyPI mirror.
 pandas==3.0.6
 numpy==2.5.3
